@@ -38,11 +38,11 @@ SARVAM_TTS_VOICE = os.getenv("SARVAM_TTS_VOICE", "simran")
 
 
 # --- OpenAI (LLM) ------------------------------------------------------------
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "YOUR_OPENAI_API_KEY")
-OPENAI_LLM_MODEL = os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini")
-OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.3"))
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash")
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 # Hard cap on reply length. Short replies = lower TTS/LLM latency on a phone call.
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "140"))
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", "80"))
 
 
 # --- Agent behaviour ---------------------------------------------------------
@@ -50,13 +50,13 @@ AGENT_NAME = os.getenv("AGENT_NAME", "maya")
 DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 # Silero VAD minimum silence before end-of-utterance. Stored as ms in the env
 # (matching .env.example) and converted to seconds for the plugin.
-VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "150"))
+VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "250"))
 VAD_MIN_SILENCE_S = VAD_MIN_SILENCE_MS / 1000.0
 
 # Endpointing window (how long to wait for the caller to resume before treating
 # the turn as finished). Tuned tight for snappy phone turns.
 MIN_ENDPOINTING_DELAY = float(os.getenv("MIN_ENDPOINTING_DELAY", "0.15"))
-MAX_ENDPOINTING_DELAY = float(os.getenv("MAX_ENDPOINTING_DELAY", "1.0"))
+MAX_ENDPOINTING_DELAY = float(os.getenv("MAX_ENDPOINTING_DELAY", "0.6"))
 
 # Telephony sample rate. 8 kHz end-to-end is the latency recipe for phone audio.
 AUDIO_SAMPLE_RATE = 8000

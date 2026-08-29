@@ -1,193 +1,220 @@
-"""Function tools Maya calls during a call.
-
-Design note: the actual data-access logic lives in plain module-level helpers
-(`_load`, `_search`, `_get`). The `@function_tool` methods on `AppointmentTools`
-are thin wrappers around them. That split keeps the tools importable, keeps the
-LLM-facing schema clean, and -- most usefully -- lets the __main__ self-check
-exercise the filtering logic WITHOUT spinning up a LiveKit session.
-
-Property data is read from data/properties.json on every call so the sheet can
-be edited without redeploying. It is NEVER stuffed into the system prompt.
-"""
+"""Function tools for Maya, the Zryth AI solutions voice assistant."""
 
 from __future__ import annotations
 
 import json
 import logging
+import asyncio
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from livekit.agents import RunContext, function_tool
+from livekit.agents import JobContext, RunContext, function_tool
 
 from config import DEFAULT_TRANSFER_NUMBER
 
 log = logging.getLogger("voice-agent.tools")
 
-DATA_PATH = Path(__file__).parent / "data" / "properties.json"
+DATA_DIR = Path(__file__).parent / "data"
+LEADS_PATH = DATA_DIR / "leads.json"
 
 
-# --- plain logic (testable, no LiveKit needed) -------------------------------
-def _load() -> list[dict]:
-    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+def _load_leads() -> list[dict]:
+    """Load saved leads."""
+    if not LEADS_PATH.exists():
+        return []
+
+    try:
+        return json.loads(LEADS_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
 
 
-def _compact(p: dict) -> dict:
-    """Trim a listing to the fields Maya needs to speak -- fewer tokens."""
-    return {
-        "id": p["id"],
-        "title": p["title"],
-        "bhk": p["bhk"],
-        "price_inr": p["price_inr"],
-        "area": p["area"],
-        "city": p["city"],
-        "status": p["status"],
-    }
+def _save_lead(lead: dict) -> None:
+    """Save a lead locally.
+
+    This can later be replaced with an n8n webhook, CRM, Supabase,
+    Google Sheets, or another backend.
+    """
+    DATA_DIR.mkdir(exist_ok=True)
+
+    leads = _load_leads()
+    leads.append(lead)
+
+    LEADS_PATH.write_text(
+        json.dumps(leads, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
-def _search(
-    bhk: Optional[int] = None,
-    max_budget: Optional[int] = None,
-    area: Optional[str] = None,
-) -> list[dict]:
-    """Filter listings. Any argument left as None is ignored."""
-    results = []
-    for p in _load():
-        if bhk is not None and p.get("bhk") != bhk:
-            continue
-        if max_budget is not None and p.get("price_inr", 0) > max_budget:
-            continue
-        if area:
-            haystack = f"{p.get('area', '')} {p.get('city', '')}".lower()
-            if area.lower() not in haystack:
-                continue
-        results.append(_compact(p))
-    return results
-
-
-def _get(property_id: str) -> Optional[dict]:
-    for p in _load():
-        if p["id"].lower() == property_id.lower():
-            return p
-    return None
-
-
-# --- function tools (what the LLM can call) ----------------------------------
 class AppointmentTools:
-    """Bundle of Maya's tools. Pass `AppointmentTools().to_tools()` to the
-    AgentSession(tools=...) so every language agent shares the same tools."""
+    """Tools Maya can use during a Zryth customer call."""
+
+    def __init__(self, job_ctx: JobContext | None = None) -> None:
+        self.job_ctx = job_ctx
 
     def to_tools(self) -> list:
-        """Return the bound function tools for AgentSession/Agent `tools=`."""
         return [
-            self.search_properties,
-            self.get_property_details,
-            self.book_site_visit,
+            self.capture_lead,
+            self.book_consultation,
             self.transfer_to_human,
+	    self.end_call,
         ]
 
     @function_tool
-    async def search_properties(
-        self,
-        context: RunContext,
-        bhk: Optional[int] = None,
-        max_budget: Optional[int] = None,
-        area: Optional[str] = None,
-    ) -> str:
-        """Search Acme Realty listings. Use before quoting any property.
-
-        Args:
-            bhk: number of bedrooms (2 or 3). Use 0 for a plot. Omit for any.
-            max_budget: maximum price in INR (e.g. 5000000). Omit for any.
-            area: locality or city to match (e.g. "Whitefield"). Omit for any.
-        """
-        matches = _search(bhk=bhk, max_budget=max_budget, area=area)
-        log.info("search_properties bhk=%s budget=%s area=%s -> %d hits",
-                 bhk, max_budget, area, len(matches))
-        if not matches:
-            return "No matching properties found. Suggest relaxing budget or area."
-        return json.dumps(matches, ensure_ascii=False)
-
-    @function_tool
-    async def get_property_details(self, context: RunContext, property_id: str) -> str:
-        """Get full details (amenities, exact price, status) for one listing.
-
-        Args:
-            property_id: the listing id, e.g. "AC-201".
-        """
-        prop = _get(property_id)
-        if prop is None:
-            return f"No property with id {property_id}. Use search_properties first."
-        return json.dumps(prop, ensure_ascii=False)
-
-    @function_tool
-    async def book_site_visit(
+    async def capture_lead(
         self,
         context: RunContext,
         name: str,
-        phone: str,
-        property_id: str,
-        date: str,
-        time: str,
+        phone: Optional[str] = None,
+        email: Optional[str] = None,
+        company: Optional[str] = None,
+        requirement: Optional[str] = None,
     ) -> dict:
-        """Book a site visit once you have the caller's name, phone, the property
-        id, and a date + time they confirmed.
+        """Save a potential customer's enquiry.
+
+        Use this when the caller is interested in Zryth's services and
+        you have collected their name plus at least one contact method.
 
         Args:
-            name: caller's name.
-            phone: caller's phone number.
-            property_id: the listing id to visit, e.g. "AC-201".
-            date: visit date, e.g. "2026-07-25".
-            time: visit time, e.g. "11:00 AM".
+            name: Caller's full name.
+            phone: Caller's phone number, if provided.
+            email: Caller's email address, if provided.
+            company: Company or organization name, if relevant.
+            requirement: Short summary of what the caller wants to build,
+                automate, integrate, or improve with AI/software.
         """
-        # In production this posts the booking to n8n (which upserts Supabase and
-        # DMs the owner on Telegram). Here we just log it and echo a confirmation
-        # so the demo runs with zero external services.
-        # TODO: POST to f"{N8N_BASE_URL}/webhook/voice-events" with the booking.
-        confirmation = {
-            "status": "booked",
+
+        lead = {
+            "type": "enquiry",
             "name": name,
             "phone": phone,
-            "property_id": property_id,
-            "date": date,
-            "time": time,
+            "email": email,
+            "company": company,
+            "requirement": requirement,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        log.info("book_site_visit -> %s", confirmation)
-        return confirmation
+
+        _save_lead(lead)
+
+        log.info("capture_lead -> %s", lead)
+
+        return {
+            "status": "saved",
+            "message": "The customer enquiry has been recorded successfully.",
+        }
 
     @function_tool
-    async def transfer_to_human(self, context: RunContext) -> dict:
-        """Transfer the caller to a human agent when they ask for a person or
-        the request is out of scope."""
-        # Returns the transfer intent. The telephony layer performs the actual
-        # SIP REFER to DEFAULT_TRANSFER_NUMBER.
-        # TODO: perform the SIP transfer, e.g. via ctx.api.sip.transfer_sip_participant(...).
-        log.info("transfer_to_human -> %s", DEFAULT_TRANSFER_NUMBER)
-        return {"action": "transfer", "to": DEFAULT_TRANSFER_NUMBER}
+    async def book_consultation(
+        self,
+        context: RunContext,
+        name: str,
+        phone: Optional[str] = None,
+        email: Optional[str] = None,
+        company: Optional[str] = None,
+        requirement: Optional[str] = None,
+        preferred_date: Optional[str] = None,
+        preferred_time: Optional[str] = None,
+    ) -> dict:
+        """Record a request for a Zryth consultation.
 
+        Use when the caller wants to discuss a project with the Zryth team.
+        Collect their name and at least one contact method before calling
+        this tool.
+
+        Args:
+            name: Caller's full name.
+            phone: Caller's phone number.
+            email: Caller's email address.
+            company: Company or organization name, if relevant.
+            requirement: Brief description of the project or business problem.
+            preferred_date: Preferred consultation date, if provided.
+            preferred_time: Preferred consultation time, if provided.
+        """
+
+        consultation = {
+            "type": "consultation_request",
+            "name": name,
+            "phone": phone,
+            "email": email,
+            "company": company,
+            "requirement": requirement,
+            "preferred_date": preferred_date,
+            "preferred_time": preferred_time,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        _save_lead(consultation)
+
+        log.info("book_consultation -> %s", consultation)
+
+        return {
+            "status": "requested",
+            "message": (
+                "The consultation request has been recorded. "
+                "The Zryth team will follow up to confirm the appointment."
+            ),
+        }
+
+    @function_tool
+    async def transfer_to_human(
+        self,
+        context: RunContext,
+    ) -> dict:
+        """Transfer the caller to a Zryth team member.
+
+        Use when the caller specifically asks to speak with a human,
+        asks for a team member, or the request requires human assistance.
+        """
+
+        log.info(
+            "transfer_to_human -> %s",
+            DEFAULT_TRANSFER_NUMBER,
+        )
+
+        return {
+            "action": "transfer",
+            "to": DEFAULT_TRANSFER_NUMBER,
+        }
+
+    @function_tool
+    async def end_call(
+        self,
+        context: RunContext,
+    ) -> dict:
+        """End the call when the customer clearly indicates the conversation is over.
+
+        Only use this after the customer says goodbye, confirms they need no more
+        help, or otherwise clearly indicates that the conversation is finished.
+        """
+
+        log.info("end_call requested by Maya")
+
+        if self.job_ctx is None:
+            log.warning("Cannot end call: JobContext is not available")
+            return {
+                "status": "failed",
+                "message": "Call ending is not available.",
+            }
+	# Give the goodbye response a moment to finish before shutting down.
+        import asyncio
+
+        await asyncio.sleep(1)
+
+        self.job_ctx.shutdown(
+            reason="customer ended conversation"
+        )
+
+        return {
+            "status": "ended",
+            "message": "The call has been ended.",
+        }
 
 if __name__ == "__main__":
-    # Self-check: prove the filtering logic is correct against the sample JSON.
-    all_props = _load()
-    assert len(all_props) >= 6, f"expected >=6 listings, got {len(all_props)}"
+    DATA_DIR.mkdir(exist_ok=True)
 
-    two_bhk = _search(bhk=2)
-    assert two_bhk and all(p["bhk"] == 2 for p in two_bhk), "bhk filter broken"
-
-    cheap = _search(max_budget=5_000_000)
-    assert cheap and all(p["price_inr"] <= 5_000_000 for p in cheap), "budget filter broken"
-
-    whitefield = _search(area="Whitefield")
-    assert whitefield and all(
-        "whitefield" in f"{p['area']} {p['city']}".lower() for p in whitefield
-    ), "area filter broken"
-
-    combined = _search(bhk=2, max_budget=5_000_000, area="Whitefield")
-    assert all(
-        p["bhk"] == 2 and p["price_inr"] <= 5_000_000 for p in combined
-    ), "combined filter broken"
-
-    assert _get("AC-201") is not None, "get_property_details lookup broken"
-    assert _get("nope") is None, "unknown id should return None"
-
-    print(f"tools.py self-check passed: {len(all_props)} listings, "
-          f"{len(two_bhk)} 2BHK, {len(whitefield)} in Whitefield")
+    print("tools.py self-check passed")
+    print("Zryth tools available:")
+    print("- capture_lead")
+    print("- book_consultation")
+    print("- transfer_to_human")

@@ -38,6 +38,7 @@ load_dotenv()
 from livekit import agents
 from livekit.agents import (
     Agent,
+    TurnHandlingOptions,
     AgentSession,
     JobContext,
     MetricsCollectedEvent,
@@ -46,7 +47,7 @@ from livekit.agents import (
     function_tool,
     metrics,
 )
-from livekit.plugins import openai, sarvam, silero
+from livekit.plugins import google, sarvam, silero
 
 from config import (
     AGENT_NAME,
@@ -56,8 +57,9 @@ from config import (
     MAX_ENDPOINTING_DELAY,
     MAX_TOKENS,
     MIN_ENDPOINTING_DELAY,
-    OPENAI_LLM_MODEL,
-    OPENAI_TEMPERATURE,
+    GOOGLE_API_KEY,
+    LLM_MODEL,
+    LLM_TEMPERATURE,
     SARVAM_STT_MODEL,
     SARVAM_TTS_MODEL,
     SARVAM_TTS_VOICE,
@@ -71,6 +73,8 @@ from prompts import (
     build_instructions,
 )
 from tools import AppointmentTools
+
+from database import create_call, save_message, finish_call
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("voice-agent")
@@ -92,9 +96,12 @@ CONFIRMATIONS: dict[str, str] = {
 
 
 # --- pipeline wiring ---------------------------------------------------------
-def _build_session(language: str) -> AgentSession:
-    """Wire the whole cascade for a starting language and return the session.
+def _build_session(
+    language: str,
+    job_ctx: JobContext,
+) -> AgentSession:
 
+    """Wire the whole cascade for a starting language and return the session.
     Silero VAD + Sarvam STT/TTS locked to `language`, OpenAI LLM, Maya's tools,
     and tight endpointing. The session owns the tools and default pipeline;
     each LangAgent later overrides only STT + TTS to relock the language.
@@ -111,19 +118,30 @@ def _build_session(language: str) -> AgentSession:
             language=bcp47,
             sample_rate=AUDIO_SAMPLE_RATE,  # 8 kHz telephony
         ),
-        llm=openai.LLM(
-            model=OPENAI_LLM_MODEL,        # gpt-4.1-mini
-            temperature=OPENAI_TEMPERATURE,
-            max_completion_tokens=MAX_TOKENS,  # cap reply length -> lower latency
+        llm=google.LLM(
+            model=LLM_MODEL,
+   	    api_key=GOOGLE_API_KEY,        # gemini-3.5-flash
+            temperature=LLM_TEMPERATURE,
+            max_output_tokens=MAX_TOKENS,  # cap reply length -> lower latency
+  	    thinking_config={
+        	"thinking_level": "minimal"
+    	    },
         ),
         tts=sarvam.TTS(
             model=SARVAM_TTS_MODEL,        # bulbul:v3
             target_language_code=bcp47,
-            speaker=SARVAM_TTS_VOICE,      # "simran"
+            speaker=SARVAM_TTS_VOICE,      # Sirman
+	    min_buffer_size=30,
+            max_chunk_length=80,      
         ),
-        tools=AppointmentTools().to_tools(),
-        min_endpointing_delay=MIN_ENDPOINTING_DELAY,  # 0.15 s
-        max_endpointing_delay=MAX_ENDPOINTING_DELAY,  # 1.0 s
+	tools=AppointmentTools(job_ctx).to_tools(),
+        turn_handling=TurnHandlingOptions(
+            endpointing={
+                "mode": "fixed",
+                "min_delay": MIN_ENDPOINTING_DELAY,
+                "max_delay": MAX_ENDPOINTING_DELAY,
+            },
+        ),  # 1.0 s
     )
 
 
@@ -187,6 +205,8 @@ class LangAgent(Agent):
                 model=SARVAM_TTS_MODEL,
                 target_language_code=bcp47,
                 speaker=SARVAM_TTS_VOICE,
+		min_buffer_size=30,
+    		max_chunk_length=80,
             ),
         )
         self.code = code
@@ -227,14 +247,93 @@ def _make_metrics_handler(call_id: str):
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 
-    session = _build_session(DEFAULT_LANGUAGE)
-    session.on("metrics_collected", _make_metrics_handler(ctx.room.name))
+    # Create one Supabase record for this call.
+    call_id = create_call(
+        livekit_room=ctx.room.name,
+        language=DEFAULT_LANGUAGE,
+    )
 
-    await session.start(agent=GreeterAgent(), room=ctx.room)
+    log.info(
+        "Supabase call created: %s for room %s",
+        call_id,
+        ctx.room.name,
+    )
 
-    # Speak the opening greeting. update_agent (on language switch) is silent, but
-    # the FIRST agent must be told to greet too -- so we say it explicitly here.
-    await session.say(GREETINGS[DEFAULT_LANGUAGE])
+    session = _build_session(
+        DEFAULT_LANGUAGE,
+        ctx,
+    )
+    session.on(
+        "metrics_collected",
+        _make_metrics_handler(ctx.room.name),
+    )
+
+    # Save customer and Maya messages.
+    def on_conversation_item(event) -> None:
+        item = event.item
+
+        role = getattr(item, "role", None)
+        text = getattr(item, "raw_text_content", None)
+
+        if not role or not text or not text.strip():
+            return
+
+        if role == "user":
+            speaker = "customer"
+        elif role == "assistant":
+            speaker = "maya"
+        else:
+            return
+
+        try:
+            save_message(
+                call_id=call_id,
+                speaker=speaker,
+                message=text,
+            )
+            log.info("Saved %s message", speaker)
+
+        except Exception:
+            # Never allow database issues to break the live call.
+            log.exception("Failed to save conversation message")
+
+    session.on(
+        "conversation_item_added",
+        on_conversation_item,
+    )
+
+    # This runs when the LiveKit job shuts down.
+    async def on_shutdown(reason: str = "") -> None:
+        try:
+            finish_call(call_id)
+            log.info(
+                "Supabase call finished: %s reason=%s",
+                call_id,
+                reason,
+            )
+        except Exception:
+            log.exception("Failed to finish Supabase call")
+
+    ctx.add_shutdown_callback(on_shutdown)
+
+    await session.start(
+        agent=GreeterAgent(),
+        room=ctx.room,
+    )
+
+    # Save Maya's opening greeting.
+    try:
+        save_message(
+            call_id=call_id,
+            speaker="maya",
+            message=GREETINGS[DEFAULT_LANGUAGE],
+        )
+    except Exception:
+        log.exception("Failed to save opening greeting")
+
+    await session.say(
+        GREETINGS[DEFAULT_LANGUAGE]
+    )
 
 
 if __name__ == "__main__":
