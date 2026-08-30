@@ -26,8 +26,10 @@ Use capture_lead for interested callers, book_consultation for confirmed booking
 
 CONVERSATION_ENDING = """
 CONVERSATION ENDING:
-If you ask whether the caller needs anything else and they respond negatively...
-Give a brief and friendly goodbye...
+If you ask whether the caller needs anything else and they respond negatively
+(e.g. "no", "no thanks", "that's all", "nothing else", "that's it", "I'm good",
+"I'm done", "bye"), treat the conversation as complete. Give one brief, friendly
+goodbye, e.g. "Alright, thank you for your time. Have a great day. Goodbye."
 Do not ask another question after this.
 """
 
