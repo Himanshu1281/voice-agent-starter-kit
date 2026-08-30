@@ -95,7 +95,7 @@ def build_instructions(language: str, script: str, include_grammar: bool = True)
     if you need to shave the last few ms. See docs/04-latency.md.
     """
     name = LANG_NAMES.get(language, language)
-    base = f"{HOT_PERSONA}\n\nRespond only in {name}. {script}"
+    base = f"{HOT_PERSONA}\n\nRespond only in {name}. {script}\n\n{CONVERSATION_ENDING}"
     grammar = load_grammar(language) if include_grammar else ""
     return f"{base}\n\n{grammar}" if grammar else base
 
