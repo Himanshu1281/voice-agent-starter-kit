@@ -167,7 +167,7 @@ Work through the docs in this order. Each one is a self-contained, copy-paste gu
    lock down the firewall, install Docker + Python, and clone the repo.
 3. **Deploy the agent** — configure `.env`, install deps, run the worker:
    ```bash
-   git clone https://github.com/dinakarselvakumar/voice-agent-starter-kit.git /opt/voice-agent
+   git clone https://github.com/DINAKAR-S/voice-agent-starter-kit.git /opt/voice-agent
    cd /opt/voice-agent
    cp .env.example .env          # then fill in your real values
    python3.11 -m venv .venv && source .venv/bin/activate

@@ -152,7 +152,7 @@ We keep the app under `/opt/voice-agent` — this exact path is referenced by th
 ```bash
 sudo mkdir -p /opt/voice-agent
 sudo chown deploy:deploy /opt/voice-agent
-git clone https://github.com/dinakarselvakumar/voice-agent-starter-kit.git /opt/voice-agent
+git clone https://github.com/DINAKAR-S/voice-agent-starter-kit.git /opt/voice-agent
 cd /opt/voice-agent
 ```
 
