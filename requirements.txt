@@ -5,7 +5,10 @@
 livekit-agents>=1.0.0
 
 # Pipeline plugins.
-livekit-plugins-sarvam        # Sarvam Saaras STT + Bulbul TTS (Indian languages)
+livekit-plugins-sarvam>=1.5.8  # Sarvam Saaras STT + Bulbul TTS (Indian languages).
+                               # >=1.5.8 matters: bulbul:v3 rejects the `pitch` and
+                               # `loudness` fields, and only newer plugin builds omit
+                               # them. An older build 400s on every call.
 livekit-plugins-silero        # Silero VAD (end-of-utterance detection)
 livekit-plugins-openai        # OpenAI gpt-4.1-mini LLM
 

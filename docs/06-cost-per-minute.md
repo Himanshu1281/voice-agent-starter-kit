@@ -116,8 +116,9 @@ Because TTS dominates and scales with Maya's word count, the budget lives or die
   Cloud per-participant-minute past the free tier.
 - **Cap `max_tokens` tight (80–140) and enforce short replies** in the persona + grammar files —
   the highest-leverage knob, because it shrinks the dominant TTS line directly.
-- **Pick a cheaper TTS tier where quality allows** (e.g. Bulbul v2 at ₹15/10k chars ≈ half the TTS
-  line) for non-flagship voices or internal lines.
+- **Shorten what you synthesize.** TTS is billed per character, so trimming filler and confirmations
+  out of the persona cuts the TTS line directly. Bulbul v2 used to be the cheap fallback here; Sarvam
+  has deprecated it and the API now rejects it, so v3 is the only tier.
 - **VAD-gate STT** so you only transcribe caller speech, not silence or Maya's audio.
 - **Batch the VPS across clients.** One KVM 2 can host several agents; splitting the ₹899/mo across
   clients drives the amortized VPS line toward zero.

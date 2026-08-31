@@ -88,6 +88,12 @@ In your `.env` (copied from [`.env.example`](../.env.example)):
   caller's.
 - `DEFAULT_TRANSFER_NUMBER` — the human this agent hands off to.
 - `SARVAM_TTS_VOICE` — pick a voice that fits the new persona if `simran` doesn't.
+  Check any new voice with a one-line synthesis call before you deploy it. The plugin
+  keeps its own list of `bulbul:v3` speakers and that list has drifted from the API in
+  both directions, so a wrong name fails in one of two ways: names the plugin does not
+  know raise a `ValueError` when the agent starts, and names the API does not know
+  return HTTP 400 in the middle of a live call. Verified working on `bulbul:v3` with
+  both the plugin and the API: `simran` (the default), `aditya`, `ritu`, `priya`, `rahul`.
 
 ---
 
