@@ -8,10 +8,16 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+import os
 
+from google import genai
 from livekit.agents import JobContext, RunContext, function_tool
 
 from config import DEFAULT_TRANSFER_NUMBER
+from database import supabase
+
+# Initialize the Gemini client for embeddings
+llm_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
 log = logging.getLogger("voice-agent.tools")
 
@@ -59,6 +65,7 @@ class AppointmentTools:
             self.book_consultation,
             self.transfer_to_human,
 	    self.end_call,
+            self.search_knowledge,
         ]
 
     @function_tool
@@ -103,6 +110,54 @@ class AppointmentTools:
             "status": "saved",
             "message": "The customer enquiry has been recorded successfully.",
         }
+
+    @function_tool
+    async def search_knowledge(
+        self,
+        context: RunContext,
+        query: str,
+    ) -> str:
+        """Search the Zryth knowledge base for product details, features, or pricing.
+        
+        Use this tool when the user asks a specific question about Zryth's offerings.
+        Do NOT guess; always look it up.
+        
+        Args:
+            query: The question or search term (e.g., 'Oswal AI features').
+        """
+        log.info(f"search_knowledge -> querying for: {query}")
+        
+        try:
+            # 1. Embed the query
+            response = llm_client.models.embed_content(
+                model='gemini-embedding-2',
+                contents=query,
+            )
+            embedding = response.embeddings[0].values
+            
+            # 2. Query Supabase
+            rpc_response = supabase.rpc(
+                'match_knowledge', 
+                {
+                    'query_embedding': embedding, 
+                    'match_threshold': 0.6, 
+                    'match_count': 3
+                }
+            ).execute()
+            
+            # 3. Format results
+            if not rpc_response.data:
+                return "No relevant information found in the knowledge base."
+                
+            results = []
+            for row in rpc_response.data:
+                results.append(row['content'])
+                
+            return "\n\n".join(results)
+            
+        except Exception as e:
+            log.error(f"search_knowledge error: {e}")
+            return "An error occurred while searching the knowledge base."
 
     @function_tool
     async def book_consultation(
