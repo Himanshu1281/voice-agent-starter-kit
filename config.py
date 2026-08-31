@@ -42,7 +42,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.5-flash")
 LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
 # Hard cap on reply length. Short replies = lower TTS/LLM latency on a phone call.
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", "80"))
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", "250"))
 
 
 # --- Agent behaviour ---------------------------------------------------------
