@@ -5,7 +5,7 @@ Run it:
     python agent.py console         # talk to Maya in your terminal (no phone)
 
 Pipeline (cascade), tuned for ~700 ms-1.2 s perceived turn latency on one India VPS:
-    Silero VAD -> Sarvam Saaras STT (codemix, 8 kHz) -> OpenAI gpt-4.1-mini
+    Silero VAD -> Sarvam Saaras STT (codemix, 8 kHz) -> Google Gemini
     -> Sarvam Bulbul TTS.
 
 Language flow: a GreeterAgent greets in English and detects the caller's
@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 # --- TLS / cert guard (optional) --------------------------------------------
-# On some minimal VPS images the system CA bundle is missing and Sarvam/OpenAI
+# On some minimal VPS images the system CA bundle is missing and Sarvam/Google
 # TLS handshakes fail. Pointing at certifi's bundle avoids that. Best-effort.
 try:
     import certifi
@@ -99,10 +99,11 @@ CONFIRMATIONS: dict[str, str] = {
 def _build_session(
     language: str,
     job_ctx: JobContext,
+    call_id: str,
 ) -> AgentSession:
 
     """Wire the whole cascade for a starting language and return the session.
-    Silero VAD + Sarvam STT/TTS locked to `language`, OpenAI LLM, Maya's tools,
+    Silero VAD + Sarvam STT/TTS locked to `language`, Google Gemini LLM, Maya's tools,
     and tight endpointing. The session owns the tools and default pipeline;
     each LangAgent later overrides only STT + TTS to relock the language.
     """
@@ -134,7 +135,7 @@ def _build_session(
 	    min_buffer_size=30,
             max_chunk_length=80,      
         ),
-	tools=AppointmentTools(job_ctx).to_tools(),
+	tools=AppointmentTools(job_ctx, call_id).to_tools(),
         turn_handling=TurnHandlingOptions(
             endpointing={
                 "mode": "fixed",
@@ -247,9 +248,19 @@ def _make_metrics_handler(call_id: str):
 async def entrypoint(ctx: JobContext) -> None:
     await ctx.connect()
 
+    # Try to extract phone from room name or metadata
+    phone = None
+    if ctx.room.metadata and "+" in ctx.room.metadata:
+        phone = ctx.room.metadata
+    elif "+" in ctx.room.name:
+        phone = ctx.room.name
+        
+    start_time = time.time()
+
     # Create one Supabase record for this call.
     call_id = create_call(
         livekit_room=ctx.room.name,
+        phone=phone,
         language=DEFAULT_LANGUAGE,
     )
 
@@ -262,6 +273,7 @@ async def entrypoint(ctx: JobContext) -> None:
     session = _build_session(
         DEFAULT_LANGUAGE,
         ctx,
+        call_id,
     )
     session.on(
         "metrics_collected",
@@ -305,7 +317,8 @@ async def entrypoint(ctx: JobContext) -> None:
     # This runs when the LiveKit job shuts down.
     async def on_shutdown(reason: str = "") -> None:
         try:
-            finish_call(call_id)
+            duration_seconds = int(time.time() - start_time)
+            finish_call(call_id, duration_seconds)
             log.info(
                 "Supabase call finished: %s reason=%s",
                 call_id,

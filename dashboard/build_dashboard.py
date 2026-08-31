@@ -17,7 +17,7 @@ Expected JSONL per call (one object per line, order preserved):
     {"type":"meta","call_id":"maya-2201","phone":"+91 90000 00001","direction":"INBOUND",
      "language":"hi","started_at":"21 Jul 2026, 04:21 PM IST","duration_min":1.2,
      "summary":"Caller booked a site visit ...",
-     "cost":{"total":3.12,"per_min":2.60,"vobiz":0.40,"sarvam":1.90,"gpt":0.30}}
+     "cost":{"total":3.12,"per_min":2.60,"vobiz":0.40,"sarvam":1.90,"gemini":0.30}}
     {"role":"user","text":"..."}
     {"role":"assistant","text":"...","latency_ms":{"eou":150,"stt":95,"llm":560,"tts":330}}
 Anything missing is tolerated -- the dashboard is a debugging aid, not a schema.
@@ -209,7 +209,7 @@ def render_card(call: dict, recordings_dir: Path) -> str:
 
     if cost:
         split = (f'Vobiz &#8377;{cost.get("vobiz",0):.2f} &middot; Sarvam &#8377;{cost.get("sarvam",0):.2f} '
-                 f'&middot; GPT &#8377;{cost.get("gpt",0):.2f}')
+                 f'&middot; Gemini &#8377;{cost.get("gemini",0):.2f}')
         costline = (f'<div class="lbl">&#128176; Cost</div><div class="costline">'
                     f'<b>&#8377;{cost.get("total",0):.2f}</b> &middot; &#8377;{cost.get("per_min",0):.2f}/min '
                     f'({split})</div>')
@@ -288,7 +288,7 @@ _DEMO_CALLS = [
                  "language": "hi", "started_at": "21 Jul 2026, 04:21 PM IST", "duration_min": 1.2,
                  "summary": "Caller asked about 2 BHK flats in Whitefield under Rs 50L and booked a "
                             "Saturday 11 AM site visit. Name and phone captured.",
-                 "cost": {"total": 3.12, "per_min": 2.60, "vobiz": 0.40, "sarvam": 1.90, "gpt": 0.30}},
+                 "cost": {"total": 3.12, "per_min": 2.60, "vobiz": 0.40, "sarvam": 1.90, "gemini": 0.30}},
         "turns": [
             {"role": "user", "text": "Namaste, 2 BHK flat chahiye Whitefield mein."},
             {"role": "assistant", "text": "Namaste! Whitefield mein 2 BHK 45 se 60 lakh ke beech "
@@ -303,7 +303,7 @@ _DEMO_CALLS = [
                  "language": "ta", "started_at": "20 Jul 2026, 10:01 AM IST", "duration_min": 2.1,
                  "summary": "Caller enquired about 3 BHK on OMR, Chennai around Rs 80L; quoted Rs 78L "
                             "and offered a site visit. Slight TTS lag noted.",
-                 "cost": {"total": 6.72, "per_min": 3.20, "vobiz": 0.40, "sarvam": 2.40, "gpt": 0.40}},
+                 "cost": {"total": 6.72, "per_min": 3.20, "vobiz": 0.40, "sarvam": 2.40, "gemini": 0.40}},
         "turns": [
             {"role": "user", "text": "Vanakkam, 3 BHK OMR la iruka?"},
             {"role": "assistant", "text": "Vanakkam! OMR-la 3 BHK iruku, 78 lakh. Site visit venuma?",
@@ -318,7 +318,7 @@ _DEMO_CALLS = [
                  "language": "en", "started_at": "20 Jul 2026, 06:35 PM IST", "duration_min": 2.8,
                  "summary": "Caller wanted a villa but STT repeatedly misheard; the agent looped on "
                             "'sorry, I didn't catch that' and then went silent. Needs a human follow-up.",
-                 "cost": {"total": 9.24, "per_min": 3.30, "vobiz": 0.40, "sarvam": 2.50, "gpt": 0.40}},
+                 "cost": {"total": 9.24, "per_min": 3.30, "vobiz": 0.40, "sarvam": 2.50, "gemini": 0.40}},
         "turns": [
             {"role": "user", "text": "Hi, I'm looking for a villa."},
             {"role": "assistant", "text": "Sorry, I didn't catch that - could you repeat?",

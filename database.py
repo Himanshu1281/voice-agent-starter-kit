@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -26,6 +26,8 @@ supabase: Client = create_client(
 )
 
 
+IST = timezone(timedelta(hours=5, minutes=30))
+
 def create_call(
     livekit_room: str,
     phone: Optional[str] = None,
@@ -37,6 +39,7 @@ def create_call(
         "livekit_room": livekit_room,
         "phone": phone,
         "language": language,
+        "started_at": datetime.now(IST).isoformat(),
     }
 
     response = (
@@ -73,7 +76,32 @@ def save_message(
     )
 
 
-def finish_call(call_id: str) -> None:
+def update_call_lead(
+    call_id: str,
+    customer_name: str,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    company: Optional[str] = None,
+    requirement: Optional[str] = None,
+) -> None:
+    """Update a call record with the customer's lead information."""
+    
+    update_data = {"customer_name": customer_name}
+    if phone: update_data["phone"] = phone
+    if email: update_data["email"] = email
+    if company: update_data["company"] = company
+    if requirement: update_data["requirement"] = requirement
+    
+    (
+        supabase
+        .table("calls")
+        .update(update_data)
+        .eq("id", call_id)
+        .execute()
+    )
+
+
+def finish_call(call_id: str, duration_seconds: int = 0) -> None:
     """Mark a call as finished."""
 
     (
@@ -81,7 +109,8 @@ def finish_call(call_id: str) -> None:
         .table("calls")
         .update(
             {
-                "ended_at": datetime.now(timezone.utc).isoformat(),
+                "ended_at": datetime.now(IST).isoformat(),
+                "duration_seconds": duration_seconds,
             }
         )
         .eq("id", call_id)

@@ -14,7 +14,7 @@ from google import genai
 from livekit.agents import JobContext, RunContext, function_tool
 
 from config import DEFAULT_TRANSFER_NUMBER
-from database import supabase
+from database import supabase, update_call_lead
 
 # Initialize the Gemini client for embeddings
 llm_client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
@@ -56,8 +56,9 @@ def _save_lead(lead: dict) -> None:
 class AppointmentTools:
     """Tools Maya can use during a Zryth customer call."""
 
-    def __init__(self, job_ctx: JobContext | None = None) -> None:
+    def __init__(self, job_ctx: JobContext | None = None, call_id: str | None = None) -> None:
         self.job_ctx = job_ctx
+        self.call_id = call_id
 
     def to_tools(self) -> list:
         return [
@@ -92,19 +93,17 @@ class AppointmentTools:
                 automate, integrate, or improve with AI/software.
         """
 
-        lead = {
-            "type": "enquiry",
-            "name": name,
-            "phone": phone,
-            "email": email,
-            "company": company,
-            "requirement": requirement,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
+        if self.call_id:
+            update_call_lead(
+                call_id=self.call_id,
+                customer_name=name,
+                phone=phone,
+                email=email,
+                company=company,
+                requirement=requirement,
+            )
 
-        _save_lead(lead)
-
-        log.info("capture_lead -> %s", lead)
+        log.info("capture_lead -> %s", name)
 
         return {
             "status": "saved",
@@ -140,7 +139,7 @@ class AppointmentTools:
                 'match_knowledge', 
                 {
                     'query_embedding': embedding, 
-                    'match_threshold': 0.6, 
+                    'match_threshold': 0.45, 
                     'match_count': 3
                 }
             ).execute()
@@ -187,21 +186,17 @@ class AppointmentTools:
             preferred_time: Preferred consultation time, if provided.
         """
 
-        consultation = {
-            "type": "consultation_request",
-            "name": name,
-            "phone": phone,
-            "email": email,
-            "company": company,
-            "requirement": requirement,
-            "preferred_date": preferred_date,
-            "preferred_time": preferred_time,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
+        if self.call_id:
+            update_call_lead(
+                call_id=self.call_id,
+                customer_name=name,
+                phone=phone,
+                email=email,
+                company=company,
+                requirement=f"{requirement} (Preferred: {preferred_date} {preferred_time})",
+            )
 
-        _save_lead(consultation)
-
-        log.info("book_consultation -> %s", consultation)
+        log.info("book_consultation -> %s", name)
 
         return {
             "status": "requested",
