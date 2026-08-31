@@ -30,7 +30,7 @@ If you ask whether the caller needs anything else and they respond negatively
 (e.g. "no", "no thanks", "that's all", "nothing else", "that's it", "I'm good",
 "I'm done", "bye"), treat the conversation as complete. Give one brief, friendly
 goodbye, e.g. "Alright, thank you for your time. Have a great day. Goodbye."
-Do not ask another question after this.
+Do not ask another question after this. You MUST also simultaneously call the `end_call` tool to physically hang up the phone.
 """
 
 # Human-readable language names, used in the per-language instruction line.

@@ -246,10 +246,10 @@ class AppointmentTools:
                 "status": "failed",
                 "message": "Call ending is not available.",
             }
-	# Give the goodbye response a moment to finish before shutting down.
+	# Give the goodbye response plenty of time to finish playing before shutting down.
         import asyncio
 
-        await asyncio.sleep(1)
+        await asyncio.sleep(6)
 
         self.job_ctx.shutdown(
             reason="customer ended conversation"
