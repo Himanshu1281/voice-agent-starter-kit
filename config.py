@@ -53,6 +53,10 @@ DEFAULT_LANGUAGE = os.getenv("DEFAULT_LANGUAGE", "en")
 VAD_MIN_SILENCE_MS = int(os.getenv("VAD_MIN_SILENCE_MS", "250"))
 VAD_MIN_SILENCE_S = VAD_MIN_SILENCE_MS / 1000.0
 
+# VAD thresholds to prevent background noise from interrupting Maya.
+VAD_ACTIVATION_THRESHOLD = float(os.getenv("VAD_ACTIVATION_THRESHOLD", "0.7"))
+VAD_MIN_SPEECH_DURATION = float(os.getenv("VAD_MIN_SPEECH_DURATION", "0.15"))
+
 # Endpointing window (how long to wait for the caller to resume before treating
 # the turn as finished). Tuned tight for snappy phone turns.
 MIN_ENDPOINTING_DELAY = float(os.getenv("MIN_ENDPOINTING_DELAY", "0.15"))

@@ -65,6 +65,8 @@ from config import (
     SARVAM_TTS_VOICE,
     SUPPORTED_LANGUAGES,
     VAD_MIN_SILENCE_S,
+    VAD_ACTIVATION_THRESHOLD,
+    VAD_MIN_SPEECH_DURATION,
 )
 from prompts import (
     GREETINGS,
@@ -111,6 +113,8 @@ def _build_session(
     return AgentSession(
         vad=silero.VAD.load(
             min_silence_duration=VAD_MIN_SILENCE_S,
+            activation_threshold=VAD_ACTIVATION_THRESHOLD,
+            min_speech_duration=VAD_MIN_SPEECH_DURATION,
             sample_rate=AUDIO_SAMPLE_RATE,
         ),
         stt=sarvam.STT(
