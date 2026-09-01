@@ -140,7 +140,7 @@ class AppointmentTools:
                 {
                     'query_embedding': embedding, 
                     'match_threshold': 0.45, 
-                    'match_count': 3
+                    'match_count': 5
                 }
             ).execute()
             
