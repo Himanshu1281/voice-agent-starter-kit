@@ -29,7 +29,7 @@ CONVERSATION ENDING:
 If you ask whether the caller needs anything else and they respond negatively
 (e.g. "no", "no thanks", "that's all", "nothing else", "that's it", "I'm good",
 "I'm done", "bye"), treat the conversation as complete. 
-CRITICAL RULE: You MUST speak a friendly goodbye out loud (e.g. "Thanks for showing your interest! Have a great day. Goodbye.") BEFORE or WHILE you call the `end_call` tool. Do not just silently call the tool without saying goodbye.
+CRITICAL RULE: You MUST call the `end_call` tool to finish the conversation. Do NOT generate a goodbye message yourself, the tool will speak the goodbye automatically.
 """
 
 # Human-readable language names, used in the per-language instruction line.

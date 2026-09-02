@@ -246,9 +246,13 @@ class AppointmentTools:
                 "status": "failed",
                 "message": "Call ending is not available.",
             }
+            
+        # Explicitly push the goodbye message into the TTS queue since the LLM often 
+        # drops text output when invoking tools.
+        await context.session.say("Thank you for your interest in Z-rith. Have a great day! Goodbye.")
+
 	# Give the goodbye response plenty of time to finish playing before shutting down.
         import asyncio
-
         await asyncio.sleep(6)
 
         self.job_ctx.shutdown(
