@@ -136,7 +136,8 @@ def _build_session(
             model=SARVAM_TTS_MODEL,        # bulbul:v3
             target_language_code=bcp47,
             speaker=SARVAM_TTS_VOICE,      # Sirman
-	    min_buffer_size=30,
+            pace=1.10,                     # 15% faster speech pace
+            min_buffer_size=30,
             max_chunk_length=80,      
         ),
 	tools=AppointmentTools(job_ctx, call_id).to_tools(),
@@ -210,6 +211,7 @@ class LangAgent(Agent):
                 model=SARVAM_TTS_MODEL,
                 target_language_code=bcp47,
                 speaker=SARVAM_TTS_VOICE,
+                pace=1.10,
 		min_buffer_size=30,
     		max_chunk_length=80,
             ),
