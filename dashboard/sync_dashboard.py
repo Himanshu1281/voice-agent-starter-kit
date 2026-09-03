@@ -85,7 +85,7 @@ def sync_calls():
         }
         
         # Requirement and Customer Name mapped to summary
-        summary = call.get("requirement", "")
+        summary = call.get("requirement") or ""
         customer_name = call.get("customer_name")
         if customer_name:
             summary = f"Customer: {customer_name}. {summary}"

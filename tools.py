@@ -129,7 +129,7 @@ class AppointmentTools:
         try:
             # 1. Embed the query
             response = llm_client.models.embed_content(
-                model='gemini-embedding-2',
+                model='gemini-embedding-001',
                 contents=query,
             )
             embedding = response.embeddings[0].values
