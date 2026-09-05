@@ -161,12 +161,9 @@ GREETER_INSTRUCTIONS = (
 )
 
 
-class GreeterAgent(Agent):
-    """Greets the caller in English and detects their language."""
-
-    def __init__(self) -> None:
-        super().__init__(instructions=GREETER_INSTRUCTIONS)
-
+class BaseMayaAgent(Agent):
+    """Base class providing language switching capabilities."""
+    
     @function_tool
     async def set_language(self, context: RunContext, language: str) -> None:
         """Switch the whole conversation to the caller's preferred language.
@@ -193,7 +190,14 @@ class GreeterAgent(Agent):
         return None
 
 
-class LangAgent(Agent):
+class GreeterAgent(BaseMayaAgent):
+    """Greets the caller in English and detects their language."""
+
+    def __init__(self) -> None:
+        super().__init__(instructions=GREETER_INSTRUCTIONS)
+
+
+class LangAgent(BaseMayaAgent):
     """One agent parameterised by language code; STT + TTS locked to it."""
 
     def __init__(self, code: str) -> None:
