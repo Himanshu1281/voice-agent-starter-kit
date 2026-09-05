@@ -31,3 +31,4 @@ dashboard/*.html
 Thumbs.db
 .idea/
 .vscode/
+supabase/
